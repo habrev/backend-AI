@@ -1,71 +1,90 @@
+import NodeCache from 'node-cache';
+import logger from '../utils/logger.js';
+
 class CacheService {
   constructor() {
-    this.cache = new Map();
-    this.defaultTTL = 5 * 60 * 1000;
-    this.cleanupInterval = setInterval(() => this.cleanup(), 60000);
-  }
-
-  set(key, value, ttl) {
-    this.cache.set(key, { 
-      data: value, 
-      expiresAt: Date.now() + (ttl || this.defaultTTL) 
+    this.cache = new NodeCache({
+      stdTTL: 3600,
+      checkperiod: 600,
+      useClones: false,
+      maxKeys: 1000
     });
+    
+    this.stats = {
+      hits: 0,
+      misses: 0,
+      keys: 0,
+      expires: 0
+    };
   }
 
   get(key) {
-    const entry = this.cache.get(key);
-    if (!entry) return null;
+    const value = this.cache.get(key);
+    if (value === undefined) {
+      this.stats.misses++;
+      logger.debug(`Cache miss for key: ${key}`);
+    } else {
+      this.stats.hits++;
+      logger.debug(`Cache hit for key: ${key}`);
+    }
+    return value;
+  }
+
+  set(key, value, ttl = null) {
+    const success = ttl ? 
+      this.cache.set(key, value, ttl) : 
+      this.cache.set(key, value);
     
-    if (Date.now() > entry.expiresAt) {
-      this.cache.delete(key);
-      return null;
+    if (success) {
+      this.stats.keys = this.cache.keys().length;
     }
-    return entry.data;
+    return success;
   }
 
-  has(key) {
-    const entry = this.cache.get(key);
-    if (!entry) return false;
-    
-    if (Date.now() > entry.expiresAt) {
-      this.cache.delete(key);
-      return false;
+  del(key) {
+    const deleted = this.cache.del(key);
+    if (deleted) {
+      this.stats.keys = this.cache.keys().length;
     }
-    return true;
-  }
-
-  delete(key) {
-    this.cache.delete(key);
-  }
-
-  clear() {
-    this.cache.clear();
-  }
-
-  cleanup() {
-    const now = Date.now();
-    for (const [key, entry] of this.cache.entries()) {
-      if (now > entry.expiresAt) {
-        this.cache.delete(key);
-      }
-    }
+    return deleted;
   }
 
   size() {
-    return this.cache.size;
+    return this.cache.keys().length;
   }
 
-  destroy() {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-      this.cleanupInterval = null;
-    }
-    this.cache.clear();
+  getStats() {
+    const keys = this.cache.keys();
+    const memoryUsage = process.memoryUsage();
+    
+    return {
+      size: keys.length,
+      maxSize: this.cache.options.maxKeys || 1000,
+      defaultTTL: this.cache.options.stdTTL,
+      checkPeriod: this.cache.options.checkperiod,
+      hits: this.stats.hits,
+      misses: this.stats.misses,
+      hitRate: this.stats.hits + this.stats.misses > 0 ? 
+        (this.stats.hits / (this.stats.hits + this.stats.misses)).toFixed(4) : 0,
+      totalKeys: this.stats.keys,
+      expiredCount: this.stats.expires,
+      memoryUsage: {
+        rss: Math.round(memoryUsage.rss / 1024 / 1024) + ' MB',
+        heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024) + ' MB',
+        heapUsed: Math.round(memoryUsage.heapUsed / 1024 / 1024) + ' MB'
+      },
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  resetStats() {
+    this.stats = {
+      hits: 0,
+      misses: 0,
+      keys: this.cache.keys().length,
+      expires: 0
+    };
   }
 }
 
-export const cacheService = new CacheService();
-
-export function destroyCacheService() {
-  cacheService.destroy();
-}
+export default new CacheService();

@@ -1,71 +1,161 @@
-import { aiService } from '../services/ai.service.js';
-import { sendSuccess } from '../utils/response.js';
-import { validate } from '../utils/validation.js';
+import aiService from '../services/ai.service.js';
+import { getAvailableModels, isValidModel, getDefaultModel } from '../config/ai-models.js';
+import logger from '../utils/logger.js';
 import { z } from 'zod';
-import { asyncHandler } from '../middleware/asyncHandler.js';
-import { logger } from '../utils/logger.js';
+import { sendSuccess, sendError } from '../utils/response.js';
 
 const chatSchema = z.object({
-  messages: z.array(z.object({
-    role: z.enum(['user', 'assistant', 'system']),
-    content: z.string().min(1).max(10000),
-  })).min(1).max(50),
-  model: z.string().optional(),
-  temperature: z.number().min(0).max(2).optional(),
-  maxTokens: z.number().int().positive().optional(),
+  message: z.string().min(1).max(2000),
+  model: z.string().optional().default(getDefaultModel().id),
+  temperature: z.number().min(0).max(2).optional().default(0.7),
+  maxTokens: z.number().min(1).max(4000).optional().default(500)
 });
 
-const textSchema = z.object({
-  prompt: z.string().min(1).max(10000),
-  systemPrompt: z.string().max(1000).optional(),
-  temperature: z.number().min(0).max(2).optional(),
-  maxTokens: z.number().int().positive().optional(),
+const generateSchema = z.object({
+  prompt: z.string().min(1).max(5000),
+  model: z.string().optional().default(getDefaultModel().id),
+  temperature: z.number().min(0).max(2).optional().default(0.7),
+  maxTokens: z.number().min(1).max(2000).optional().default(300)
 });
 
 const sentimentSchema = z.object({
   text: z.string().min(1).max(5000),
+  model: z.string().optional().default(getDefaultModel().id)
 });
 
 const summarizeSchema = z.object({
-  text: z.string().min(1).max(50000),
-  maxLength: z.number().int().positive().max(1000).optional(),
+  text: z.string().min(1).max(10000),
+  model: z.string().optional().default(getDefaultModel().id),
+  maxLength: z.number().min(50).max(1000).optional().default(150)
 });
 
-export const aiController = {
-  chat: asyncHandler(async (req, res) => {
-    const data = validate(chatSchema, req.body);
-    logger.debug('Chat request received', { messageCount: data.messages.length });
-    const response = await aiService.chatCompletion(data.messages);
-    sendSuccess(res, { response }, 'Chat completion successful');
-  }),
+class AIController {
+  async chat(req, res, next) {
+    try {
+      const validatedData = chatSchema.parse(req.body);
+      
+      if (!isValidModel(validatedData.model)) {
+        return sendError(res, `Invalid model: ${validatedData.model}. Available models: ${getAvailableModels().map(m => m.id).join(', ')}`, 400, req.requestId);
+      }
 
-  generate: asyncHandler(async (req, res) => {
-    const data = validate(textSchema, req.body);
-    logger.debug('Text generation request received', { promptLength: data.prompt.length });
-    const response = await aiService.generateText(data.prompt, data.systemPrompt);
-    sendSuccess(res, { response }, 'Text generated successfully');
-  }),
+      logger.info(`AI Chat request - Model: ${validatedData.model}, Message length: ${validatedData.message.length}`);
 
-  sentiment: asyncHandler(async (req, res) => {
-    const data = validate(sentimentSchema, req.body);
-    logger.debug('Sentiment analysis request received', { textLength: data.text.length });
-    const sentiment = await aiService.analyzeSentiment(data.text);
-    sendSuccess(res, { 
-      sentiment: sentiment.trim().toLowerCase()
-    }, 'Sentiment analyzed successfully');
-  }),
+      const result = await aiService.chatCompletion(
+        validatedData.message,
+        validatedData.model,
+        validatedData.temperature,
+        validatedData.maxTokens
+      );
 
-  summarize: asyncHandler(async (req, res) => {
-    const data = validate(summarizeSchema, req.body);
-    logger.debug('Summarization request received', { 
-      textLength: data.text.length,
-      maxLength: data.maxLength 
-    });
-    const summary = await aiService.summarizeText(data.text, data.maxLength);
-    sendSuccess(res, { 
-      summary,
-      originalLength: data.text.length,
-      summaryLength: summary.length
-    }, 'Text summarized successfully');
-  }),
-};
+      sendSuccess(res, {
+        response: result,
+        model: validatedData.model,
+        timestamp: new Date().toISOString()
+      }, 'Chat completion successful', 200, req.requestId);
+    } catch (error) {
+      logger.error('AI Chat error:', error);
+      next(error);
+    }
+  }
+
+  async generateText(req, res, next) {
+    try {
+      const validatedData = generateSchema.parse(req.body);
+      
+      if (!isValidModel(validatedData.model)) {
+        return sendError(res, `Invalid model: ${validatedData.model}`, 400, req.requestId);
+      }
+
+      logger.info(`Text Generation request - Model: ${validatedData.model}, Prompt length: ${validatedData.prompt.length}`);
+
+      const result = await aiService.generateText(
+        validatedData.prompt,
+        validatedData.model,
+        validatedData.temperature,
+        validatedData.maxTokens
+      );
+
+      sendSuccess(res, {
+        generatedText: result,
+        model: validatedData.model,
+        timestamp: new Date().toISOString()
+      }, 'Text generation successful', 200, req.requestId);
+    } catch (error) {
+      logger.error('Text Generation error:', error);
+      next(error);
+    }
+  }
+
+  async analyzeSentiment(req, res, next) {
+    try {
+      const validatedData = sentimentSchema.parse(req.body);
+      
+      if (!isValidModel(validatedData.model)) {
+        return sendError(res, `Invalid model: ${validatedData.model}`, 400, req.requestId);
+      }
+
+      logger.info(`Sentiment Analysis request - Model: ${validatedData.model}, Text length: ${validatedData.text.length}`);
+
+      const result = await aiService.analyzeSentiment(
+        validatedData.text,
+        validatedData.model
+      );
+
+      sendSuccess(res, {
+        sentiment: result,
+        model: validatedData.model,
+        timestamp: new Date().toISOString()
+      }, 'Sentiment analysis successful', 200, req.requestId);
+    } catch (error) {
+      logger.error('Sentiment Analysis error:', error);
+      next(error);
+    }
+  }
+
+  async summarizeText(req, res, next) {
+    try {
+      const validatedData = summarizeSchema.parse(req.body);
+      
+      if (!isValidModel(validatedData.model)) {
+        return sendError(res, `Invalid model: ${validatedData.model}`, 400, req.requestId);
+      }
+
+
+      logger.info(`Text Summarization request - Model: ${validatedData.model}, Text length: ${validatedData.text.length}`);
+
+      const result = await aiService.summarizeText(
+        validatedData.text,
+        validatedData.model,
+        validatedData.maxLength
+      );
+
+      sendSuccess(res, {
+        summary: result,
+        model: validatedData.model,
+        originalLength: validatedData.text.length,
+        summaryLength: result.length,
+        timestamp: new Date().toISOString()
+      }, 'Text summarization successful', 200, req.requestId);
+    } catch (error) {
+      logger.error('Text Summarization error:', error);
+      next(error);
+    }
+  }
+
+  async getAvailableModels(req, res, next) {
+    try {
+      const models = getAvailableModels();
+      
+      sendSuccess(res, {
+        models,
+        defaultModel: getDefaultModel().id,
+        timestamp: new Date().toISOString()
+      }, 'Available models retrieved successfully', 200, req.requestId);
+    } catch (error) {
+      logger.error('Error getting available models:', error);
+      next(error);
+    }
+  }
+}
+
+export default new AIController();

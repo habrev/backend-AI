@@ -1,10 +1,44 @@
 import crypto from 'crypto';
 
-// In-memory user store (replace with actual database)
 class UserStore {
   constructor() {
     this.users = new Map();
-    this.emailIndex = new Map(); // Optimized email lookup
+    this.emailIndex = new Map(); 
+    this.initializeTestUsers(); 
+  }
+
+  initializeTestUsers() {
+    const testUsers = [
+      {
+        id: 'admin-user-id-123',
+        email: 'admin@example.com',
+        name: 'Admin User',
+        password: 'admin123', // In real app, this should be hashed
+        role: 'admin',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        id: 'regular-user-id-456', 
+        email: 'user@example.com',
+        name: 'Regular User',
+        password: 'user123',
+        role: 'user',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+    ];
+
+    console.log('🔄 Initializing test users...');
+    
+    // Add test users to the store
+    testUsers.forEach(user => {
+      this.users.set(user.id, user);
+      this.emailIndex.set(user.email, user.id);
+      console.log(`✅ Added user: ${user.email} (${user.role})`);
+    });
+
+    console.log(`📊 Total users initialized: ${this.users.size}`);
   }
 
   async create(data) {
@@ -17,6 +51,7 @@ class UserStore {
       id: crypto.randomUUID(),
       email: data.email,
       name: data.name,
+      password: data.password, // Make sure to include password
       role: data.role || 'user',
       createdAt: new Date(),
       updatedAt: new Date(),

@@ -1,12 +1,17 @@
-import { Router } from 'express';
-import { aiController } from '../controllers/ai.controller.js';
+import express from 'express';
+import aiController from '../controllers/ai.controller.js';
+import { optionalAuth } from '../middleware/auth.js';
+import rateLimiter from '../middleware/rateLimiter.js';
 
-const router = Router();
+const router = express.Router();
 
-router.post('/chat', aiController.chat);
-router.post('/generate', aiController.generate);
-router.post('/sentiment', aiController.sentiment);
-router.post('/summarize', aiController.summarize);
+router.use(rateLimiter);
+
+router.get('/models', aiController.getAvailableModels);
+
+router.post('/chat', optionalAuth, aiController.chat);
+router.post('/generate', optionalAuth, aiController.generateText);
+router.post('/sentiment', optionalAuth, aiController.analyzeSentiment);
+router.post('/summarize', optionalAuth, aiController.summarizeText);
 
 export default router;
-

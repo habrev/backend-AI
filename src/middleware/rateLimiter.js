@@ -10,9 +10,11 @@ export function rateLimitMiddleware(req, res, next) {
   res.setHeader('X-RateLimit-Reset', new Date(result.resetTime).toISOString());
 
   if (!result.allowed) {
-    return sendError(res, 'Too many requests. Please try again later.', 429);
+    return sendError(res, 'Too many requests. Please try again later.', 429, req.requestId);
   }
 
   next();
 }
 
+// Export as default for backward compatibility
+export default rateLimitMiddleware;

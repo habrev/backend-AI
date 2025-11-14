@@ -1,0 +1,10 @@
+2025-11-14 23:00:57 INFO [NO_ID] Server running on port 3000
+2025-11-14 23:04:20 INFO [7abc2f3c-7753-4554-89a6-00cc8f294ca0] GET / - Request started
+2025-11-14 23:04:20 WARN [7abc2f3c-7753-4554-89a6-00cc8f294ca0] GET / 404 - 54ms
+2025-11-14 23:04:21 INFO [5865255c-6181-4421-828d-dc797983f893] GET /favicon.ico - Request started
+2025-11-14 23:04:21 WARN [5865255c-6181-4421-828d-dc797983f893] GET /favicon.ico 404 - 4ms
+2025-11-14 23:05:04 INFO [d8bce9a1-ac92-4c4b-996d-55964ec3323f] GET / - Request started
+2025-11-14 23:05:04 WARN [d8bce9a1-ac92-4c4b-996d-55964ec3323f] GET / 404 - 7ms
+2025-11-14 23:07:11 INFO [NO_ID] SIGINT received, shutting down gracefully
+2025-11-14 23:10:56 INFO [NO_ID] Server running on port 3000
+2025-11-14 23:14:10 INFO [NO_ID] SIGINT received, shutting down gracefully
